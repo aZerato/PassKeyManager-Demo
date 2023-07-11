@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App</title>
+  <script
+  src="https://code.jquery.com/jquery-3.7.0.js"
+  integrity="sha256-JlqSTELeR4TLqP0OG9dxM7yDPqX1ox/HfgiSLBj8+kM="
+  crossorigin="anonymous"></script>
+</head>
+
+<body>
+  
+  <form id="logout" style="display: none;">
+    <button type="submit">Logout</button>
+    
+    <textarea name="result"></textarea>
+  </form>
+  
+  <form id="login">
+    <input type="text"
+    name="username"
+    autocomplete="username webauthn" />
+    
+    <input type="password" 
+    name="password" />
+    
+    <button type="submit">Login</button>
+    
+    <button type="button">Login with PassKey</button>
+    
+    <textarea name="result"></textarea>
+  </form>
+  
+  
+  <form id="subscribe" style="display: none;">
+    <input type="hidden"
+    name="username" />
+    
+    <button type="submit">Subscribe</button>
+    
+    <textarea name="result"></textarea>
+  </form>
+  
+  
+  
+  <script>
+    class PassKeyManager {
+      constructor()
+      {
+        // Cette valeur devrait venir du serveur.
+        this.challengeSvr = new Uint8Array([
+        0x8c, 0x0a, 0x26, 0xff, 0x22, 0x91, 0xc1, 0xe9, 0xb9, 0x4e, 0x2e, 0x17, 0x1a,
+        0x98, 0x6a, 0x73, 0x71, 0x9d, 0x43, 0x48, 0xd5, 0xa7, 0x6a, 0x15, 0x7e, 0x38,
+        0x94, 0x52, 0x77, 0x97, 0x0f, 0xef,
+        ]).buffer;
+        
+        this.rpName = "localhost test";
+        this.rpId = "localhost";
+      }   
+      
+      async getCredential() {
+        const abortController = new AbortController();
+        
+        const publicKeyCredentialRequestOptions = {  
+          // Server generated challenge  
+          challenge: this.challengeSvr,  
+          // The same RP ID as used during registration  
+          rpId: this.rpId,  
+        };
+        
+        return await navigator.credentials.get({  
+          publicKey: publicKeyCredentialRequestOptions
+        });  
+      }
+      
+      isAvailable() {
+        return new Promise((resolve, reject) => {
+          if (window.PublicKeyCredential &&  
+          PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable && 
+          PublicKeyCredential.isConditionalMediationAvailable) 
+          {  
+            Promise.all([  
+            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(),  
+            PublicKeyCredential.isConditionalMediationAvailable(),  
+            ]).then(results => {  
+              if (results.every(r => r === true)) {  
+                resolve(true);              
+              } else {
+                reject(false);
+              }
+            });  
+          }
+        });
+      }
+      
+      storeCredential(credential) {
+        navigator.credentials.store(credential);
+      }
+      
+      async passkeyCreate(userName) {
+        const userId = new Uint16Array(24);
+        
+        const publicKeyCredentialCreationOptions = {  
+          challenge: this.challengeSvr,  
+          rp: {  
+            name: this.rpName,
+            id: this.rpId,  
+          },  
+          user: {  
+            id: userId,  
+            name: `${userName}@localhost`,  
+            displayName: userName,  
+          },  
+          pubKeyCredParams: [
+          {
+            type: "public-key",
+            alg: -7,
+          },
+          {
+            type: "public-key",
+            alg: -257,
+          }
+          ],
+          excludeCredentials: [{  
+            id: userId,  
+            type: 'public-key',  
+            transports: ['internal'],  
+          }], 
+          timeout: 60000,
+          authenticatorSelection: {  
+            authenticatorAttachment: "platform",  
+            requireResidentKey: true,  
+          }  
+        };
+        
+        return await navigator.credentials.create({  
+          publicKey: publicKeyCredentialCreationOptions  
+        });
+      }
+      
+      // ArrayBuffer to URLBase64
+      bufferEncode(value) {
+        return btoa(String.fromCharCode.apply(null, new Uint8Array(value)))
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+      }
+    }
+    
+    $(document).ready(() => {
+      const pkm = new PassKeyManager();
+      
+      const initFormLogout = () => {
+        const $form = $('form#logout');
+        const $submitBtn = $form.find('button[type=submit]'); 
+        const $resultTxt = $form.find('textarea[name=result]');
+        
+        const $formLogin = $('form#login');
+        const $formSub = $('form#subscribe');
+        const $userNameHidd = $formSub.find('input[name=username]'); 
+        
+        $submitBtn.on('click', (ev) => {
+          ev.preventDefault();
+          
+          $.ajax({
+            type: "POST",
+            url: "/logout",
+            success: (data) => {
+              $form.hide();
+              $formSub.hide();
+              $userNameHidd.val('');
+              $formLogin.show();
+            },
+            error: () => {
+              $resultTxt.val("Failed");
+            }
+          });
+        });      
+      };
+      initFormLogout();
+      
+      const initFormLogin = () => {
+        const $form = $('form#login');
+        const $userNameInp = $form.find('input[name=username]'); 
+        const $passwordInp = $form.find('input[name=password]'); 
+        const $submitBtn = $form.find('button[type=submit]'); 
+        const $passkeyLoginBtn = $form.find('button[type=button]'); 
+        const $resultTxt = $form.find('textarea[name=result]');
+        
+        const $formLogout = $('form#logout');
+        const $formSub = $('form#subscribe');
+        const $userNameHidd = $formSub.find('input[name=username]'); 
+        
+        $submitBtn.on('click', (ev) => {
+          ev.preventDefault();
+          
+          let username = $userNameInp.val();
+          let password = $passwordInp.val();
+          
+          $.ajax({
+            type: "POST",
+            url: "/login",
+            data: {
+              username: username,
+              password: password
+            },
+            success: async(data) => {
+              
+              $resultTxt.val(JSON.stringify(data));
+              $form.hide();
+              $userNameHidd.val($userNameInp.val());
+              $formSub.show();
+              $formLogout.show();
+            },
+            error: () => {
+              $resultTxt.val("Failed");
+            }
+          });
+        });
+        
+        $passkeyLoginBtn.on('click', (ev) => {
+          ev.preventDefault();
+          
+          pkm.getCredential().then((credential) => {
+            let paramData = {
+              id: credential.id,
+              rawId: pkm.bufferEncode(credential.rawId),
+              type: credential.type,
+              response: {
+                attestationObject: pkm.bufferEncode(credential.response.attestationObject),
+                clientDataJSON: pkm.bufferEncode(credential.response.clientDataJSON)
+              }
+            };
+            
+            $.ajax({
+              type: "POST",
+              url: "/loginpasskey",
+              data: paramData,
+              success: (data) => {
+                $resultTxt.val(JSON.stringify(data));
+              },
+              error: () => {
+                $resultTxt.val("Failed");
+              }  
+            });
+          });          
+        });
+        
+      };
+      initFormLogin();
+      
+      const initFormSub = () => {
+        const $form = $('form#subscribe');
+        const $usernameInpHidd = $form.find('input[name=username]'); 
+        const $submitBtn = $form.find('button[type=submit]'); 
+        const $resultTxt = $form.find('textarea[name=result]');
+        
+        $submitBtn.on('click', (ev) => {
+          ev.preventDefault();
+          
+          let username= $usernameInpHidd.val();
+          
+          pkm.passkeyCreate(username)
+          .then(async (credential) => {
+            console.log("credential");
+            console.log(credential);
+            
+            let paramData = {
+              id: credential.id,
+              rawId: pkm.bufferEncode(credential.rawId),
+              type: credential.type,
+              response: {
+                attestationObject: pkm.bufferEncode(credential.response.attestationObject),
+                clientDataJSON: pkm.bufferEncode(credential.response.clientDataJSON)
+              }
+            };
+            
+            // send result to backend
+            $.ajax({
+              type: "POST",
+              url: "/subscribe",
+              data: paramData,
+              success: (data) => {
+                //pkm.storeCredential(credential);
+                $resultTxt.val(JSON.stringify(data));
+              },
+              error: () => {
+                $resultTxt.val("Failed");
+              }            
+            });
+            
+            
+          });
+        });
+      };
+      initFormSub();
+      
+    });    
+  </script>
+</body>
+</html>
