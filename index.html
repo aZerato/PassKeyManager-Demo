@@ -33,8 +33,7 @@
     
     <textarea name="result"></textarea>
   </form>
-  
-  
+    
   <form id="subscribe" style="display: none;">
     <input type="hidden"
     name="username" />
@@ -43,14 +42,12 @@
     
     <textarea name="result"></textarea>
   </form>
-  
-  
-  
+    
   <script>
     class PassKeyManager {
       constructor()
       {
-        // Cette valeur devrait venir du serveur.
+        // This value normally comes from the server.
         this.challengeSvr = new Uint8Array([
         0x8c, 0x0a, 0x26, 0xff, 0x22, 0x91, 0xc1, 0xe9, 0xb9, 0x4e, 0x2e, 0x17, 0x1a,
         0x98, 0x6a, 0x73, 0x71, 0x9d, 0x43, 0x48, 0xd5, 0xa7, 0x6a, 0x15, 0x7e, 0x38,
@@ -74,30 +71,6 @@
         return await navigator.credentials.get({  
           publicKey: publicKeyCredentialRequestOptions
         });  
-      }
-      
-      isAvailable() {
-        return new Promise((resolve, reject) => {
-          if (window.PublicKeyCredential &&  
-          PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable && 
-          PublicKeyCredential.isConditionalMediationAvailable) 
-          {  
-            Promise.all([  
-            PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(),  
-            PublicKeyCredential.isConditionalMediationAvailable(),  
-            ]).then(results => {  
-              if (results.every(r => r === true)) {  
-                resolve(true);              
-              } else {
-                reject(false);
-              }
-            });  
-          }
-        });
-      }
-      
-      storeCredential(credential) {
-        navigator.credentials.store(credential);
       }
       
       async passkeyCreate(userName) {
@@ -207,11 +180,14 @@
               username: username,
               password: password
             },
-            success: async(data) => {
-              
-              $resultTxt.val(JSON.stringify(data));
+            success: async(data) => {              
               $form.hide();
               $userNameHidd.val($userNameInp.val());
+
+              $resultTxt.val('');
+              $userNameInp.val('');
+              $passwordInp.val('');
+
               $formSub.show();
               $formLogout.show();
             },
@@ -240,7 +216,15 @@
               url: "/loginpasskey",
               data: paramData,
               success: (data) => {
-                $resultTxt.val(JSON.stringify(data));
+                $form.hide();
+                $userNameHidd.val(data);
+
+                $resultTxt.val('');
+                $userNameInp.val('');
+                $passwordInp.val('');
+
+                $formSub.show();
+                $formLogout.show();
               },
               error: () => {
                 $resultTxt.val("Failed");
@@ -284,7 +268,6 @@
               url: "/subscribe",
               data: paramData,
               success: (data) => {
-                //pkm.storeCredential(credential);
                 $resultTxt.val(JSON.stringify(data));
               },
               error: () => {
