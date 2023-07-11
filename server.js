@@ -90,7 +90,7 @@ app.post('/subscribe', async (req, res) => {
   }
   else 
   {
-    users.map(u => {
+    users = users.map(u => {
       if (u.id === user.id){
         return user;
       }
@@ -147,7 +147,7 @@ app.post('/loginpasskey', (req, res) => {
     req.session.user = {
       username: user.username
     };
-    res.send('Login successful');
+    res.send(user.username);
     return;
   }
 });
